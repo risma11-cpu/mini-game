@@ -40,11 +40,14 @@ function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
 }
 
 function playSound(type) {
     if (!audioCtx || !soundEnabled) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const now = audioCtx.currentTime;
     const masterGain = audioCtx.createGain();
     masterGain.connect(audioCtx.destination);
@@ -171,8 +174,15 @@ let firstInteraction = false;
 
 function startBGM() {
     if (bgmPlaying || !soundEnabled || !audioCtx) return;
-    bgmPlaying = true;
-    playBGMLoop();
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+            bgmPlaying = true;
+            playBGMLoop();
+        });
+    } else {
+        bgmPlaying = true;
+        playBGMLoop();
+    }
 }
 
 function stopBGM() {
@@ -192,7 +202,6 @@ function playBGMLoop() {
     const now = audioCtx.currentTime + 0.05;
     let t = now;
 
-    // Melody: nada-nada ceria pakai pentatonik
     const melody = [
         { f: 523.25, d: 0.28, g: 0.14 },
         { f: 659.25, d: 0.28, g: 0.14 },
@@ -231,7 +240,6 @@ function playBGMLoop() {
 
     const loopDur = t - now;
 
-    // Bass lembut
     const bassLine = [
         { f: 130.81, s: 0,      d: 3.8  },
         { f: 110.00, s: 3.8,    d: 2.8  },
@@ -255,7 +263,6 @@ function playBGMLoop() {
         bgmNodes.push(osc);
     });
 
-    // Pad/akord halus buat nuansa
     const padChords = [
         { freqs: [261.63, 329.63, 392.00], s: 0,    d: 3.8 },
         { freqs: [220.00, 261.63, 329.63], s: 3.8,  d: 2.8 },
@@ -281,21 +288,44 @@ function playBGMLoop() {
         });
     });
 
-    // Loop lagi setelah selesai
     bgmTimer = setTimeout(() => {
         bgmNodes = [];
         playBGMLoop();
     }, loopDur * 1000);
 }
 
-// BGM mulai pas user klik pertama kali (browser ngelarang autoplay)
-document.addEventListener('click', () => {
-    if (!firstInteraction) {
-        firstInteraction = true;
-        initAudio();
+/* ==============================
+   MOBILE AUDIO UNLOCK
+   ============================== */
+function unlockAudio() {
+    if (firstInteraction) return;
+    firstInteraction = true;
+
+    initAudio();
+
+    // Warm-up: putar nada super pendek & pelan buat "buka" audio context di HP
+    // Tanpa ini, Safari iOS & Chrome Android sering nolak audio berikutnya
+    try {
+        const warmUp = audioCtx.createOscillator();
+        const warmGain = audioCtx.createGain();
+        warmUp.connect(warmGain);
+        warmGain.connect(audioCtx.destination);
+        warmUp.type = 'sine';
+        warmUp.frequency.setValueAtTime(440, audioCtx.currentTime);
+        warmGain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+        warmUp.start(audioCtx.currentTime);
+        warmUp.stop(audioCtx.currentTime + 0.05);
+    } catch(e) {}
+
+    // BGM mulai setelah warm-up selesai
+    setTimeout(() => {
         startBGM();
-    }
-}, { once: false });
+    }, 100);
+}
+
+// touchstart buat HP (lebih pertama dari click), click buat desktop
+document.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
+document.addEventListener('click', unlockAudio, { once: true });
 
 /* ==============================
    DOM REFERENCES
