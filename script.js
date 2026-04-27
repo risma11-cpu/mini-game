@@ -13,6 +13,8 @@ const DIFFICULTIES = {
     hard:   { cols: 5, rows: 4, pairs: 10, label: 'Hard' }
 };
 
+const LEVEL_ORDER = ['easy', 'medium', 'hard'];
+
 let state = {
     difficulty: 'easy',
     cards: [],
@@ -49,7 +51,6 @@ function playSound(type) {
 
     switch (type) {
         case 'flip': {
-            // Short percussive snap
             const osc = audioCtx.createOscillator();
             const g = audioCtx.createGain();
             osc.connect(g); g.connect(masterGain);
@@ -62,7 +63,6 @@ function playSound(type) {
             break;
         }
         case 'match': {
-            // Happy ascending arpeggio (C5-E5-G5)
             [523.25, 659.25, 783.99].forEach((freq, i) => {
                 const osc = audioCtx.createOscillator();
                 const g = audioCtx.createGain();
@@ -77,7 +77,6 @@ function playSound(type) {
             break;
         }
         case 'mismatch': {
-            // Descending buzz
             const osc = audioCtx.createOscillator();
             const g = audioCtx.createGain();
             osc.connect(g); g.connect(masterGain);
@@ -90,7 +89,6 @@ function playSound(type) {
             break;
         }
         case 'win': {
-            // Victory fanfare (C5-D5-E5-G5-A5-C6)
             [523.25, 587.33, 659.25, 783.99, 880, 1046.5].forEach((freq, i) => {
                 const osc = audioCtx.createOscillator();
                 const g = audioCtx.createGain();
@@ -105,7 +103,6 @@ function playSound(type) {
             break;
         }
         case 'combo': {
-            // Quick sparkle
             [784, 988, 1175].forEach((freq, i) => {
                 const osc = audioCtx.createOscillator();
                 const g = audioCtx.createGain();
@@ -119,8 +116,186 @@ function playSound(type) {
             });
             break;
         }
+        case 'start': {
+            [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                osc.connect(g); g.connect(masterGain);
+                osc.type = 'sine';
+                const t = now + i * 0.12;
+                osc.frequency.setValueAtTime(freq, t);
+                g.gain.setValueAtTime(0.15, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+                osc.start(t); osc.stop(t + 0.25);
+            });
+            break;
+        }
+        case 'levelUp': {
+            [659.25, 783.99, 1046.5, 1318.5].forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                osc.connect(g); g.connect(masterGain);
+                osc.type = 'triangle';
+                const t = now + i * 0.1;
+                osc.frequency.setValueAtTime(freq, t);
+                g.gain.setValueAtTime(0.18, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+                osc.start(t); osc.stop(t + 0.3);
+            });
+            break;
+        }
+        case 'allClear': {
+            [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                osc.connect(g); g.connect(masterGain);
+                osc.type = 'triangle';
+                const t = now + i * 0.15;
+                osc.frequency.setValueAtTime(freq, t);
+                g.gain.setValueAtTime(0.2, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+                osc.start(t); osc.stop(t + 0.4);
+            });
+            break;
+        }
     }
 }
+
+/* ==============================
+   BACKGROUND MUSIC (BGM)
+   ============================== */
+let bgmPlaying = false;
+let bgmTimer = null;
+let bgmNodes = [];
+let firstInteraction = false;
+
+function startBGM() {
+    if (bgmPlaying || !soundEnabled || !audioCtx) return;
+    bgmPlaying = true;
+    playBGMLoop();
+}
+
+function stopBGM() {
+    bgmPlaying = false;
+    if (bgmTimer) clearTimeout(bgmTimer);
+    bgmTimer = null;
+    bgmNodes.forEach(n => { try { n.stop(); } catch(e){} });
+    bgmNodes = [];
+}
+
+function playBGMLoop() {
+    if (!bgmPlaying || !soundEnabled || !audioCtx) {
+        bgmPlaying = false;
+        return;
+    }
+
+    const now = audioCtx.currentTime + 0.05;
+    let t = now;
+
+    // Melody: nada-nada ceria pakai pentatonik
+    const melody = [
+        { f: 523.25, d: 0.28, g: 0.14 },
+        { f: 659.25, d: 0.28, g: 0.14 },
+        { f: 783.99, d: 0.28, g: 0.14 },
+        { f: 659.25, d: 0.28, g: 0.14 },
+        { f: 880.00, d: 0.45, g: 0.18 },
+        { f: 783.99, d: 0.28, g: 0.14 },
+        { f: 659.25, d: 0.28, g: 0.14 },
+        { f: 523.25, d: 0.45, g: 0.28 },
+        { f: 392.00, d: 0.28, g: 0.14 },
+        { f: 523.25, d: 0.28, g: 0.14 },
+        { f: 659.25, d: 0.28, g: 0.14 },
+        { f: 523.25, d: 0.28, g: 0.14 },
+        { f: 783.99, d: 0.45, g: 0.18 },
+        { f: 659.25, d: 0.28, g: 0.14 },
+        { f: 523.25, d: 0.28, g: 0.14 },
+        { f: 392.00, d: 0.45, g: 0.45 }
+    ];
+
+    melody.forEach(note => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(note.f, t);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.055, t + 0.04);
+        gain.gain.setValueAtTime(0.055, t + note.d - 0.04);
+        gain.gain.linearRampToValueAtTime(0, t + note.d);
+        osc.start(t);
+        osc.stop(t + note.d + 0.01);
+        bgmNodes.push(osc);
+        t += note.d + note.g;
+    });
+
+    const loopDur = t - now;
+
+    // Bass lembut
+    const bassLine = [
+        { f: 130.81, s: 0,      d: 3.8  },
+        { f: 110.00, s: 3.8,    d: 2.8  },
+        { f: 98.00,  s: 6.6,    d: 2.0  }
+    ];
+
+    bassLine.forEach(note => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'triangle';
+        const nt = now + note.s;
+        osc.frequency.setValueAtTime(note.f, nt);
+        gain.gain.setValueAtTime(0, nt);
+        gain.gain.linearRampToValueAtTime(0.035, nt + 0.06);
+        gain.gain.setValueAtTime(0.035, nt + note.d - 0.06);
+        gain.gain.linearRampToValueAtTime(0, nt + note.d);
+        osc.start(nt);
+        osc.stop(nt + note.d + 0.01);
+        bgmNodes.push(osc);
+    });
+
+    // Pad/akord halus buat nuansa
+    const padChords = [
+        { freqs: [261.63, 329.63, 392.00], s: 0,    d: 3.8 },
+        { freqs: [220.00, 261.63, 329.63], s: 3.8,  d: 2.8 },
+        { freqs: [196.00, 246.94, 293.66], s: 6.6,  d: 2.0 }
+    ];
+
+    padChords.forEach(chord => {
+        chord.freqs.forEach(freq => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            const nt = now + chord.s;
+            osc.frequency.setValueAtTime(freq, nt);
+            gain.gain.setValueAtTime(0, nt);
+            gain.gain.linearRampToValueAtTime(0.018, nt + 0.3);
+            gain.gain.setValueAtTime(0.018, nt + chord.d - 0.3);
+            gain.gain.linearRampToValueAtTime(0, nt + chord.d);
+            osc.start(nt);
+            osc.stop(nt + chord.d + 0.01);
+            bgmNodes.push(osc);
+        });
+    });
+
+    // Loop lagi setelah selesai
+    bgmTimer = setTimeout(() => {
+        bgmNodes = [];
+        playBGMLoop();
+    }, loopDur * 1000);
+}
+
+// BGM mulai pas user klik pertama kali (browser ngelarang autoplay)
+document.addEventListener('click', () => {
+    if (!firstInteraction) {
+        firstInteraction = true;
+        initAudio();
+        startBGM();
+    }
+}, { once: false });
 
 /* ==============================
    DOM REFERENCES
@@ -140,7 +315,6 @@ const bestBadge = document.getElementById('bestBadge');
 const bestText = document.getElementById('bestText');
 const diffCards = document.querySelectorAll('.diff-card');
 
-// Stat displays
 const movesVal = document.getElementById('movesVal');
 const matchesVal = document.getElementById('matchesVal');
 const timerVal = document.getElementById('timerVal');
@@ -206,13 +380,17 @@ soundToggle.addEventListener('click', () => {
     soundToggle.innerHTML = soundEnabled
         ? '<i class="fas fa-volume-high"></i>'
         : '<i class="fas fa-volume-xmark"></i>';
+    if (soundEnabled) {
+        firstInteraction = true;
+        startBGM();
+    } else {
+        stopBGM();
+    }
 });
 
 /* ==============================
    GAME LOGIC
    ============================== */
-
-// Fisher-Yates shuffle
 function shuffle(arr) {
     const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {
@@ -224,6 +402,7 @@ function shuffle(arr) {
 
 function startGame() {
     initAudio();
+    playSound('start');
     const diff = DIFFICULTIES[state.difficulty];
     state.totalPairs = diff.pairs;
     state.matchedPairs = 0;
@@ -236,17 +415,14 @@ function startGame() {
     state.timerSeconds = 0;
     clearInterval(state.timerInterval);
 
-    // Pick random emojis and create pairs
     const chosenEmojis = shuffle(EMOJIS).slice(0, diff.pairs);
     const cardEmojis = shuffle([...chosenEmojis, ...chosenEmojis]);
     state.cards = cardEmojis;
 
-    // Switch views
     heroSection.classList.add('hidden');
     gameSection.classList.add('active');
     victoryOverlay.classList.remove('active');
 
-    // Set grid columns
     gameGrid.className = 'game-grid';
     if (diff.cols === 5) {
         gameGrid.classList.add('cols-5');
@@ -254,7 +430,6 @@ function startGame() {
         gameGrid.classList.add('cols-4');
     }
 
-    // Render cards
     renderCards();
     updateStats();
 }
@@ -296,24 +471,20 @@ function renderCards() {
 
 function handleCardClick(index) {
     if (state.isLocked) return;
-    // Can't flip already matched or already flipped card
     if (state.flippedIndices.includes(index)) return;
     const cardEl = gameGrid.children[index];
     if (!cardEl || cardEl.classList.contains('matched')) return;
 
-    // Start timer on first flip
     if (!state.gameStarted) {
         state.gameStarted = true;
         startTimer();
     }
 
-    // Flip the card
     cardEl.classList.add('flipped');
     cardEl.setAttribute('aria-label', `Card ${index + 1}, showing ${state.cards[index]}`);
     state.flippedIndices.push(index);
     playSound('flip');
 
-    // Check for pair
     if (state.flippedIndices.length === 2) {
         state.moves++;
         state.isLocked = true;
@@ -327,7 +498,6 @@ function checkMatch() {
     const card2 = gameGrid.children[i2];
 
     if (state.cards[i1] === state.cards[i2]) {
-        // Match found!
         state.combo++;
         const bonus = state.combo >= 2 ? state.combo * 50 : 0;
         const matchScore = 100 + bonus;
@@ -339,7 +509,6 @@ function checkMatch() {
             card2.classList.add('matched');
             playSound('match');
 
-            // Particle effects from both cards
             spawnMatchParticles(card1);
             spawnMatchParticles(card2);
 
@@ -352,13 +521,11 @@ function checkMatch() {
             state.isLocked = false;
             updateStats();
 
-            // Check win
             if (state.matchedPairs === state.totalPairs) {
                 setTimeout(handleWin, 600);
             }
         }, 350);
     } else {
-        // No match
         state.combo = 0;
         playSound('mismatch');
         setTimeout(() => {
@@ -377,38 +544,62 @@ function checkMatch() {
     }
 }
 
+function getNextLevel(currentDiff) {
+    const idx = LEVEL_ORDER.indexOf(currentDiff);
+    if (idx < LEVEL_ORDER.length - 1) {
+        return LEVEL_ORDER[idx + 1];
+    }
+    return null;
+}
+
 function handleWin() {
     clearInterval(state.timerInterval);
-    playSound('win');
 
-    // Calculate final score with time bonus
+    const nextLevel = getNextLevel(state.difficulty);
+    const isAllClear = !nextLevel;
+
+    if (isAllClear) {
+        playSound('allClear');
+    } else {
+        playSound('win');
+    }
+
     const timeBonus = Math.max(0, 300 - state.timerSeconds * 2);
     const efficiencyBonus = Math.max(0, (state.totalPairs * 3 - state.moves) * 25);
     state.score += timeBonus + efficiencyBonus;
 
-    // Save best score
     const isNewBest = saveBestScore(state.difficulty, state.score);
     const best = getBestScore(state.difficulty);
 
-    // Determine star rating (out of 3)
     const minMoves = state.totalPairs;
     const moveRatio = state.moves / minMoves;
     let stars = 1;
     if (moveRatio <= 1.5) stars = 3;
     else if (moveRatio <= 2.2) stars = 2;
 
-    // Populate victory modal
-    document.getElementById('vTitle').textContent = isNewBest ? 'New Record' : 'Congratulations';
-    document.getElementById('vSubtitle').textContent = isNewBest
-        ? 'You set a new personal best!'
-        : 'You matched all the pairs!';
+    if (isAllClear) {
+        document.getElementById('vTitle').textContent = 'All Levels Clear!';
+        document.getElementById('vSubtitle').textContent = isNewBest
+            ? 'Kamu menguasai semua level dengan skor terbaik!'
+            : 'Kamu sudah menyelesaikan semua level!';
+    } else {
+        document.getElementById('vTitle').textContent = isNewBest ? 'New Record' : 'Congratulations';
+        document.getElementById('vSubtitle').textContent = isNewBest
+            ? 'You set a new personal best!'
+            : 'Siap lanjut ke level berikutnya?';
+    }
     document.getElementById('vStars').innerHTML = renderStars(stars);
     document.getElementById('vMoves').textContent = state.moves;
     document.getElementById('vTime').textContent = formatTime(state.timerSeconds);
     document.getElementById('vScore').textContent = state.score;
     document.getElementById('vBest').textContent = best;
 
-    // Show modal & confetti
+    if (isAllClear) {
+        playAgainBtn.innerHTML = '<i class="fas fa-redo"></i> Main Lagi';
+    } else {
+        playAgainBtn.innerHTML = '<i class="fas fa-forward"></i> Next Level';
+    }
+
     victoryOverlay.classList.add('active');
     spawnConfetti();
     updateStats();
@@ -460,7 +651,7 @@ function saveBestScore(diff, score) {
             localStorage.setItem(key, score.toString());
             return true;
         }
-    } catch (e) { /* storage not available */ }
+    } catch (e) {}
     return false;
 }
 
@@ -474,8 +665,6 @@ function getBestScore(diff) {
 /* ==============================
    EFFECTS
    ============================== */
-
-// Match particles burst from a card element
 function spawnMatchParticles(cardEl) {
     const rect = cardEl.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
@@ -499,7 +688,6 @@ function spawnMatchParticles(cardEl) {
         setTimeout(() => p.remove(), 800);
     }
 
-    // Star bursts
     for (let i = 0; i < 4; i++) {
         const s = document.createElement('div');
         s.className = 'star-burst';
@@ -516,7 +704,6 @@ function spawnMatchParticles(cardEl) {
     }
 }
 
-// Confetti rain
 function spawnConfetti() {
     const colors = ['#FFD54F', '#FF6B9D', '#66BB6A', '#4FC3F7', '#FF9800', '#E040FB', '#FFD700'];
     for (let i = 0; i < 60; i++) {
@@ -537,7 +724,6 @@ function spawnConfetti() {
     }
 }
 
-// Toast notification
 let toastTimeout = null;
 function showToast(msg, color) {
     clearTimeout(toastTimeout);
@@ -557,6 +743,14 @@ restartBtn.addEventListener('click', startGame);
 menuBtn.addEventListener('click', goToMenu);
 playAgainBtn.addEventListener('click', () => {
     victoryOverlay.classList.remove('active');
+    const nextLevel = getNextLevel(state.difficulty);
+    if (nextLevel) {
+        state.difficulty = nextLevel;
+        playSound('levelUp');
+        showToast(`Level ${DIFFICULTIES[nextLevel].label}!`, 'var(--green)');
+    } else {
+        state.difficulty = 'easy';
+    }
     startGame();
 });
 victoryMenuBtn.addEventListener('click', () => {
@@ -571,7 +765,6 @@ function goToMenu() {
     showBestScore();
 }
 
-// Keyboard: Escape to go back
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         if (victoryOverlay.classList.contains('active')) {
